@@ -66,6 +66,20 @@ def chunk_file(file_path: Path, repo_root: Path, repo_id: str) -> list[CodeChunk
         chunks.append(_build_module_summary(
             relative_path, language, source_code, parsed, repo_id
         ))
+        
+        # FIX: If no semantic chunks (functions/classes) were found (e.g. parser failed or empty file),
+        # add the whole file content as a chunk to ensure RAG has access to it.
+        if len(chunks) <= 1: # Only contains module summary
+            chunks.append(CodeChunk(
+                content=source_code[:settings.max_chunk_tokens * 8],
+                file_path=relative_path,
+                language=language,
+                chunk_type="file_fallback",
+                name=file_path.name,
+                start_line=1,
+                end_line=source_code.count("\n") + 1,
+                repo_id=repo_id,
+            ))
     else:
         # Non-parseable file: treat as single chunk
         chunks.append(CodeChunk(
