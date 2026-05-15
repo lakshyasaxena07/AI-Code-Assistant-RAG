@@ -16,8 +16,8 @@ RUN pip install --no-cache-dir -r frontend_requirements.txt
 # Copy the entire project
 COPY . .
 
-# Expose Streamlit port
-EXPOSE 8501
+# Expose Hugging Face default port
+EXPOSE 7860
 
 # Start script
 CMD ["bash", "start.sh"]
