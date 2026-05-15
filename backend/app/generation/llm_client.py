@@ -105,40 +105,62 @@ async def _anthropic_stream(user_prompt: str) -> AsyncGenerator[str, None]:
 
 async def _gemini_generate(user_prompt: str) -> str:
     from openai import AsyncOpenAI
+    log.info(f"Generating Gemini response for prompt length: {len(user_prompt)}")
+    if not settings.gemini_api_key:
+        log.error("GEMINI_API_KEY is missing!")
+        return "Error: Gemini API key is not configured."
+        
     client = AsyncOpenAI(
         api_key=settings.gemini_api_key,
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
     )
-    response = await client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.1,
-        max_tokens=4096,
-    )
-    return response.choices[0].message.content
+    try:
+        response = await client.chat.completions.create(
+            model=settings.llm_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.1,
+            max_tokens=4096,
+        )
+        log.info("Gemini response generated successfully")
+        return response.choices[0].message.content
+    except Exception as e:
+        log.error(f"Gemini API error: {e}")
+        raise
 
 
 async def _gemini_stream(user_prompt: str) -> AsyncGenerator[str, None]:
     from openai import AsyncOpenAI
+    log.info(f"Starting Gemini stream for prompt length: {len(user_prompt)}")
+    if not settings.gemini_api_key:
+        log.error("GEMINI_API_KEY is missing!")
+        yield "Error: Gemini API key is not configured."
+        return
+
     client = AsyncOpenAI(
         api_key=settings.gemini_api_key,
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
     )
-    stream = await client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.1,
-        max_tokens=4096,
-        stream=True,
-    )
-    async for chunk in stream:
-        delta = chunk.choices[0].delta
-        if delta.content:
-            yield delta.content
+    try:
+        stream = await client.chat.completions.create(
+            model=settings.llm_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.1,
+            max_tokens=4096,
+            stream=True,
+        )
+        log.info("Gemini stream connection established")
+        async for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                yield delta.content
+        log.info("Gemini stream complete")
+    except Exception as e:
+        log.error(f"Gemini streaming error: {e}")
+        raise
 
