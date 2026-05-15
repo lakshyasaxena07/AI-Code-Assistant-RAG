@@ -1,0 +1,35 @@
+# Core
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+websockets==14.2
+pydantic==2.10.5
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# LLM Providers
+openai==1.59.9
+anthropic==0.44.0
+
+# Embeddings & Reranking
+sentence-transformers==3.4.1
+torch>=2.6.0
+
+# Vector Store (Migrated to in-memory PyTorch to avoid C++ build errors on Windows)
+# chromadb==0.6.3
+
+# BM25
+rank-bm25==0.2.2
+
+# Code Parsing (Disabled on Python 3.13 due to lack of wheels, uses fallback parser instead)
+# tree-sitter==0.24.0
+# tree-sitter-languages==1.10.2
+
+# Graph
+networkx==3.4.2
+
+# Utilities
+aiofiles==24.1.0
+gitpython==3.1.44
+httpx==0.28.1
+tiktoken==0.8.0
