@@ -16,6 +16,12 @@ RUN pip install --no-cache-dir -r frontend_requirements.txt
 # Copy the entire project
 COPY . .
 
+# Create data directories
+RUN mkdir -p /app/backend/data/repos /app/backend/data/graphs /app/backend/data/chroma
+
+# Make start script executable
+RUN chmod +x start.sh
+
 # Expose Hugging Face default port
 EXPOSE 7860
 

@@ -39,7 +39,10 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
         extra = "ignore"
+        # If .env is missing (e.g. on HF Spaces), just use OS env vars
+        env_ignore_empty = True
 
     @property
     def cors_origins_list(self) -> list[str]:

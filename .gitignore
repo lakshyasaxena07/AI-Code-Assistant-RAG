@@ -16,9 +16,8 @@ node_modules/
 backend/data/
 frontend/data/
 
-# Env vars
-.env
-.env.*
+# Env vars (backend .env has API keys — never commit)
+backend/.env
 
 # Logs
 *.log
