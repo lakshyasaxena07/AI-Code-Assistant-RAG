@@ -30,6 +30,11 @@ class Conversation:
         if files:
             self.referenced_files.update(files)
 
+    def get_history(self, max_turns: int = 5) -> list[dict]:
+        """Return full history in OpenAI message format for the LLM."""
+        recent = self.turns[-max_turns * 2:]
+        return [{"role": t.role, "content": t.content} for t in recent]
+
     def get_context_summary(self, max_turns: int = 3) -> str:
         """Build a concise summary of recent conversation for query rewriting."""
         if not self.turns:

@@ -58,6 +58,7 @@ async def query_stream(websocket: WebSocket):
             start = time.time()
             conversation = get_or_create_conversation(conversation_id)
             context_summary = conversation.get_context_summary()
+            history = conversation.get_history()
 
             intent = classify_intent(question)
             intent_config = get_intent_config(intent)
@@ -88,7 +89,7 @@ async def query_stream(websocket: WebSocket):
 
             # Stream LLM response
             full_response = ""
-            async for token in generate_response_stream(question, context, intent):
+            async for token in generate_response_stream(question, context, intent, history):
                 full_response += token
                 await websocket.send_json({"type": "token", "data": token})
 
@@ -131,6 +132,7 @@ async def _execute_pipeline(
 
     conversation = get_or_create_conversation(conversation_id)
     context_summary = conversation.get_context_summary()
+    history = conversation.get_history()
 
     # 1. Classify intent
     intent = classify_intent(question)
@@ -156,7 +158,7 @@ async def _execute_pipeline(
     retrieval_ms = (time.time() - start) * 1000
 
     # 7. Generate response
-    answer = await generate_response(question, context, intent)
+    answer = await generate_response(question, context, intent, history)
 
     # 8. Verify
     verify_response(answer, used_chunks)

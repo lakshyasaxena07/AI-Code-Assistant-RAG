@@ -13,34 +13,41 @@ async def generate_response(
     question: str,
     context: str,
     intent: str,
+    history: list[dict] | None = None,
 ) -> str:
     """Generate a non-streaming response."""
     user_prompt = get_query_prompt(question, context, intent)
 
     if settings.llm_provider == "anthropic":
-        return await _anthropic_generate(user_prompt)
+        return await _anthropic_generate(user_prompt, history)
     elif settings.llm_provider == "gemini":
-        return await _gemini_generate(user_prompt)
+        return await _gemini_generate(user_prompt, history)
+    elif settings.llm_provider == "groq":
+        return await _groq_generate(user_prompt, history)
     else:
-        return await _openai_generate(user_prompt)
+        return await _openai_generate(user_prompt, history)
 
 
 async def generate_response_stream(
     question: str,
     context: str,
     intent: str,
+    history: list[dict] | None = None,
 ) -> AsyncGenerator[str, None]:
     """Generate a streaming response, yielding tokens as they arrive."""
     user_prompt = get_query_prompt(question, context, intent)
 
     if settings.llm_provider == "anthropic":
-        async for token in _anthropic_stream(user_prompt):
+        async for token in _anthropic_stream(user_prompt, history):
             yield token
     elif settings.llm_provider == "gemini":
-        async for token in _gemini_stream(user_prompt):
+        async for token in _gemini_stream(user_prompt, history):
+            yield token
+    elif settings.llm_provider == "groq":
+        async for token in _groq_stream(user_prompt, history):
             yield token
     else:
-        async for token in _openai_stream(user_prompt):
+        async for token in _openai_stream(user_prompt, history):
             yield token
 
 
@@ -103,7 +110,7 @@ async def _anthropic_stream(user_prompt: str) -> AsyncGenerator[str, None]:
             yield text
 
 
-async def _gemini_generate(user_prompt: str) -> str:
+async def _gemini_generate(user_prompt: str, history: list[dict] | None = None) -> str:
     from openai import AsyncOpenAI
     log.info(f"Generating Gemini response for prompt length: {len(user_prompt)}")
     if not settings.gemini_api_key:
@@ -114,13 +121,15 @@ async def _gemini_generate(user_prompt: str) -> str:
         api_key=settings.gemini_api_key,
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
     )
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_prompt})
+
     try:
         response = await client.chat.completions.create(
             model=settings.llm_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
+            messages=messages,
             temperature=0.1,
             max_tokens=4096,
         )
@@ -131,7 +140,7 @@ async def _gemini_generate(user_prompt: str) -> str:
         raise
 
 
-async def _gemini_stream(user_prompt: str) -> AsyncGenerator[str, None]:
+async def _gemini_stream(user_prompt: str, history: list[dict] | None = None) -> AsyncGenerator[str, None]:
     from openai import AsyncOpenAI
     log.info(f"Starting Gemini stream for prompt length: {len(user_prompt)}")
     if not settings.gemini_api_key:
@@ -143,13 +152,15 @@ async def _gemini_stream(user_prompt: str) -> AsyncGenerator[str, None]:
         api_key=settings.gemini_api_key,
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
     )
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_prompt})
+
     try:
         stream = await client.chat.completions.create(
             model=settings.llm_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
+            messages=messages,
             temperature=0.1,
             max_tokens=4096,
             stream=True,
@@ -163,4 +174,48 @@ async def _gemini_stream(user_prompt: str) -> AsyncGenerator[str, None]:
     except Exception as e:
         log.error(f"Gemini streaming error: {e}")
         raise
+
+
+async def _groq_generate(user_prompt: str, history: list[dict] | None = None) -> str:
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(
+        api_key=settings.groq_api_key,
+        base_url="https://api.groq.com/openai/v1"
+    )
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_prompt})
+
+    response = await client.chat.completions.create(
+        model=settings.llm_model,
+        messages=messages,
+        temperature=0.1,
+        max_tokens=4096,
+    )
+    return response.choices[0].message.content
+
+
+async def _groq_stream(user_prompt: str, history: list[dict] | None = None) -> AsyncGenerator[str, None]:
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(
+        api_key=settings.groq_api_key,
+        base_url="https://api.groq.com/openai/v1"
+    )
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_prompt})
+
+    stream = await client.chat.completions.create(
+        model=settings.llm_model,
+        messages=messages,
+        temperature=0.1,
+        max_tokens=4096,
+        stream=True,
+    )
+    async for chunk in stream:
+        delta = chunk.choices[0].delta
+        if delta.content:
+            yield delta.content
 

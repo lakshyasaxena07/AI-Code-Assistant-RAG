@@ -5,11 +5,12 @@ import json
 
 class Settings(BaseSettings):
     # LLM
-    llm_provider: str = "gemini"
+    llm_provider: str = "groq"
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
-    llm_model: str = "gemini-2.5-flash"
+    groq_api_key: str = ""
+    llm_model: str = "llama-3.3-70b-versatile"
 
     # Embedding & Reranking
     embedding_model: str = "BAAI/bge-base-en-v1.5"
