@@ -51,30 +51,32 @@ async def generate_response_stream(
             yield token
 
 
-async def _openai_generate(user_prompt: str) -> str:
+async def _openai_generate(user_prompt: str, history: list[dict] | None = None) -> str:
     from openai import AsyncOpenAI
     client = AsyncOpenAI(api_key=settings.openai_api_key)
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_prompt})
     response = await client.chat.completions.create(
         model=settings.llm_model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
         temperature=0.1,
         max_tokens=4096,
     )
-    return response.choices[0].message.content
+    return response.choices[0].message.content or ""
 
 
-async def _openai_stream(user_prompt: str) -> AsyncGenerator[str, None]:
+async def _openai_stream(user_prompt: str, history: list[dict] | None = None) -> AsyncGenerator[str, None]:
     from openai import AsyncOpenAI
     client = AsyncOpenAI(api_key=settings.openai_api_key)
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": user_prompt})
     stream = await client.chat.completions.create(
         model=settings.llm_model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
         temperature=0.1,
         max_tokens=4096,
         stream=True,
@@ -85,7 +87,7 @@ async def _openai_stream(user_prompt: str) -> AsyncGenerator[str, None]:
             yield delta.content
 
 
-async def _anthropic_generate(user_prompt: str) -> str:
+async def _anthropic_generate(user_prompt: str, history: list[dict] | None = None) -> str:
     from anthropic import AsyncAnthropic
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     response = await client.messages.create(
@@ -97,7 +99,7 @@ async def _anthropic_generate(user_prompt: str) -> str:
     return response.content[0].text
 
 
-async def _anthropic_stream(user_prompt: str) -> AsyncGenerator[str, None]:
+async def _anthropic_stream(user_prompt: str, history: list[dict] | None = None) -> AsyncGenerator[str, None]:
     from anthropic import AsyncAnthropic
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     async with client.messages.stream(
@@ -108,6 +110,14 @@ async def _anthropic_stream(user_prompt: str) -> AsyncGenerator[str, None]:
     ) as stream:
         async for text in stream.text_stream:
             yield text
+
+
+def _get_gemini_model() -> str:
+    """Ensure a valid Gemini model is used even if an old llama model was passed in env."""
+    model = settings.llm_model
+    if not model or "gemini" not in model.lower():
+        return "gemini-1.5-flash"
+    return model
 
 
 async def _gemini_generate(user_prompt: str, history: list[dict] | None = None) -> str:
@@ -126,15 +136,16 @@ async def _gemini_generate(user_prompt: str, history: list[dict] | None = None) 
         messages.extend(history)
     messages.append({"role": "user", "content": user_prompt})
 
+    model = _get_gemini_model()
     try:
         response = await client.chat.completions.create(
-            model=settings.llm_model,
+            model=model,
             messages=messages,
             temperature=0.1,
             max_tokens=4096,
         )
         log.info("Gemini response generated successfully")
-        return response.choices[0].message.content
+        return response.choices[0].message.content or ""
     except Exception as e:
         log.error(f"Gemini API error: {e}")
         raise
@@ -157,9 +168,10 @@ async def _gemini_stream(user_prompt: str, history: list[dict] | None = None) ->
         messages.extend(history)
     messages.append({"role": "user", "content": user_prompt})
 
+    model = _get_gemini_model()
     try:
         stream = await client.chat.completions.create(
-            model=settings.llm_model,
+            model=model,
             messages=messages,
             temperature=0.1,
             max_tokens=4096,

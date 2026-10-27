@@ -1,16 +1,29 @@
-from pydantic_settings import BaseSettings
+from pydantic import Field, AliasChoices
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 import json
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(".env", "backend/.env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+        env_ignore_empty=True,
+    )
+
     # LLM
-    llm_provider: str = "groq"
+    llm_provider: str = "gemini"
     openai_api_key: str = ""
     anthropic_api_key: str = ""
-    gemini_api_key: str = ""
+    gemini_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "gemini_api_key", "GEMINI_API_KEY", "GOOGLE_API_KEY", "google_api_key"
+        ),
+    )
     groq_api_key: str = ""
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "gemini-1.5-flash"
 
     # Embedding & Reranking
     embedding_model: str = "BAAI/bge-base-en-v1.5"
@@ -37,13 +50,6 @@ class Settings(BaseSettings):
     # Chunking
     max_chunk_tokens: int = 512
     min_chunk_tokens: int = 30
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
-        # If .env is missing (e.g. on HF Spaces), just use OS env vars
-        env_ignore_empty = True
 
     @property
     def cors_origins_list(self) -> list[str]:
