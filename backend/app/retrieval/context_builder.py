@@ -69,7 +69,7 @@ def build_context(
     context = "\n".join(context_parts)
 
     log.info(
-        f"Context built: {len(used_chunks)} chunks, "
+        f"[TIMING] Context built: {len(used_chunks)} chunks, "
         f"~{current_chars // 4} tokens"
     )
 

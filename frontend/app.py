@@ -21,13 +21,17 @@ if "selected_repo" not in st.session_state:
     st.session_state.selected_repo = None
 if "conversation_id" not in st.session_state:
     st.session_state.conversation_id = None
+if "is_generating" not in st.session_state:
+    st.session_state.is_generating = False
 
 # --- Helper Functions ---
 def fetch_repos():
     try:
-        res = requests.get(f"{BACKEND_URL}/api/ingest/repos")
+        res = requests.get(f"{BACKEND_URL}/api/ingest/repos", timeout=5)
         if res.status_code == 200:
             st.session_state.repos = res.json().get("repos", [])
+    except requests.exceptions.ConnectionError:
+        st.warning(f"Backend API is not reachable at {BACKEND_URL}. Ensure the backend server is running.")
     except Exception as e:
         st.error(f"Failed to fetch repos: {e}")
 
@@ -52,6 +56,8 @@ with st.sidebar:
                         fetch_repos()
                     else:
                         st.error(f"Error: {res.text}")
+                except requests.exceptions.ConnectionError:
+                    st.error(f"Cannot connect to backend at {BACKEND_URL}. Please ensure the backend is running.")
                 except Exception as e:
                     st.error(f"Request failed: {e}")
                     
@@ -97,11 +103,12 @@ for msg in st.session_state.messages:
                 st.json(msg["retrieval_info"])
 
 # Chat Input
-if prompt := st.chat_input("Ask about your code..."):
+if prompt := st.chat_input("Ask about your code...", disabled=st.session_state.is_generating):
     if not st.session_state.selected_repo:
         st.error("Please select a repository first from the sidebar.")
         st.stop()
         
+    st.session_state.is_generating = True
     # Add user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -118,6 +125,7 @@ if prompt := st.chat_input("Ask about your code..."):
         # Connect to WebSocket
         try:
             ws = websocket.WebSocket()
+            ws.settimeout(60.0)
             ws.connect(f"{WS_URL}/api/query/stream")
             
             payload = {
@@ -145,16 +153,34 @@ if prompt := st.chat_input("Ask about your code..."):
                     st.session_state.conversation_id = data["data"].get("conversation_id")
                     break
                 elif msg_type == "error":
-                    st.error(f"Error: {data['data']}")
+                    err_code = data.get("error_code", "generic")
+                    err_msg = data.get("data", "An unexpected error occurred.")
+                    retry_after = data.get("retry_after")
+
+                    if err_code == "quota_exhausted":
+                        st.error(f"🚫 **API Quota Exhausted**: {err_msg}")
+                    elif err_code == "rate_limit":
+                        retry_text = f" (Retry after {retry_after:.0f}s)" if retry_after else ""
+                        st.warning(f"⏳ **Rate Limit Exceeded**: {err_msg}{retry_text}")
+                    elif err_code == "service_unavailable":
+                        st.warning(f"⚠️ **Service Overloaded (503)**: {err_msg}")
+                    elif err_code == "timeout":
+                        st.warning(f"⏱️ **Request Timed Out**: {err_msg}")
+                    elif err_code == "auth_error":
+                        st.error(f"🔑 **Authentication Failed**: {err_msg}")
+                    else:
+                        st.error(f"❌ **Error**: {err_msg}")
                     break
             
             ws.close()
-            response_placeholder.markdown(full_response)
-            
-            msg_obj = {"role": "assistant", "content": full_response}
-            if retrieval_info:
-                msg_obj["retrieval_info"] = retrieval_info
-            st.session_state.messages.append(msg_obj)
+            if full_response:
+                response_placeholder.markdown(full_response)
+                msg_obj = {"role": "assistant", "content": full_response}
+                if retrieval_info:
+                    msg_obj["retrieval_info"] = retrieval_info
+                st.session_state.messages.append(msg_obj)
             
         except Exception as e:
             st.error(f"Connection error: {e}")
+        finally:
+            st.session_state.is_generating = False

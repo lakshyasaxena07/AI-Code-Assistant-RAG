@@ -85,8 +85,20 @@ def build_code_graph(chunks: list[CodeChunk], repo_id: str) -> nx.DiGraph:
     return G
 
 
+_graph_cache: dict[str, nx.DiGraph] = {}
+
+
+def clear_graph_cache(repo_id: str | None = None):
+    """Clear in-memory cached graph."""
+    if repo_id:
+        _graph_cache.pop(repo_id, None)
+    else:
+        _graph_cache.clear()
+
+
 def save_graph(graph: nx.DiGraph, repo_id: str) -> Path:
-    """Persist graph to disk."""
+    """Persist graph to disk and update cache."""
+    _graph_cache[repo_id] = graph
     path = settings.graph_path / f"{repo_id}.gpickle"
     with open(path, "wb") as f:
         pickle.dump(graph, f)
@@ -94,11 +106,15 @@ def save_graph(graph: nx.DiGraph, repo_id: str) -> Path:
 
 
 def load_graph(repo_id: str) -> nx.DiGraph | None:
-    """Load a persisted graph."""
+    """Load a persisted graph with in-memory caching."""
+    if repo_id in _graph_cache:
+        return _graph_cache[repo_id]
     path = settings.graph_path / f"{repo_id}.gpickle"
     if path.exists():
         with open(path, "rb") as f:
-            return pickle.load(f)
+            graph = pickle.load(f)
+        _graph_cache[repo_id] = graph
+        return graph
     return None
 
 

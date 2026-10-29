@@ -23,18 +23,32 @@ def hybrid_retrieve(
     alpha = alpha if alpha is not None else settings.hybrid_alpha
     candidate_k = top_k * 3
 
+    import time
+    t0_hybrid = time.perf_counter()
+
     # Vector Search
+    t0_v = time.perf_counter()
     vector_results = _vector_search(query, repo_id, candidate_k)
+    t_v_ms = (time.perf_counter() - t0_v) * 1000
 
     # BM25 Search
+    t0_b = time.perf_counter()
     bm25_results = _bm25_search(query, repo_id, candidate_k)
+    t_b_ms = (time.perf_counter() - t0_b) * 1000
 
     # Reciprocal Rank Fusion
+    t0_f = time.perf_counter()
     fused = _reciprocal_rank_fusion(bm25_results, vector_results, alpha=alpha)
     final = sorted(fused.values(), key=lambda x: x["rrf_score"], reverse=True)[:top_k]
+    t_f_ms = (time.perf_counter() - t0_f) * 1000
+    t_total_ms = (time.perf_counter() - t0_hybrid) * 1000
 
     log.info(
-        f"Hybrid retrieval: {len(bm25_results)} BM25 + {len(vector_results)} vector → {len(final)} fused"
+        f"[TIMING] Hybrid retrieval ({len(final)} chunks): vector={t_v_ms:.1f}ms, "
+        f"BM25={t_b_ms:.1f}ms, fusion={t_f_ms:.1f}ms | total_hybrid={t_total_ms:.1f}ms"
+    )
+    log.info(
+        f"Hybrid retrieval: {len(bm25_results)} BM25 + {len(vector_results)} vector -> {len(final)} fused"
     )
     return final
 

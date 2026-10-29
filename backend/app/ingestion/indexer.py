@@ -21,6 +21,7 @@ log = get_logger(__name__)
 
 def index_chunks(chunks: list[CodeChunk], repo_id: str) -> dict:
     """Index chunks into PyTorch Vector Store and build a BM25 index."""
+    clear_indexer_cache(repo_id)
     if not chunks:
         return {"total_chunks": 0}
 
@@ -84,20 +85,42 @@ def index_chunks(chunks: list[CodeChunk], repo_id: str) -> dict:
     }
 
 
+_bm25_cache: dict[str, tuple[BM25Okapi, list[str], list[dict]]] = {}
+_vector_cache: dict[str, dict] = {}
+
+
+def clear_indexer_cache(repo_id: str | None = None):
+    """Clear in-memory cached index data (useful on repo re-indexing)."""
+    if repo_id:
+        _bm25_cache.pop(repo_id, None)
+        _vector_cache.pop(repo_id, None)
+    else:
+        _bm25_cache.clear()
+        _vector_cache.clear()
+
+
 def load_bm25(repo_id: str) -> tuple[BM25Okapi, list[str], list[dict]] | None:
+    if repo_id in _bm25_cache:
+        return _bm25_cache[repo_id]
     path = settings.graph_path / f"{repo_id}_bm25.pkl"
     if path.exists():
         with open(path, "rb") as f:
             data = pickle.load(f)
-        return data["bm25"], data["chunk_ids"], data["chunks_data"]
+        result = (data["bm25"], data["chunk_ids"], data["chunks_data"])
+        _bm25_cache[repo_id] = result
+        return result
     return None
 
 
 def load_vector_store(repo_id: str) -> dict | None:
+    if repo_id in _vector_cache:
+        return _vector_cache[repo_id]
     path = settings.chroma_path / f"{repo_id}_vectors.pkl"
     if path.exists():
         with open(path, "rb") as f:
-            return pickle.load(f)
+            data = pickle.load(f)
+        _vector_cache[repo_id] = data
+        return data
     return None
 
 

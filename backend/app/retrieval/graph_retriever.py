@@ -39,11 +39,14 @@ def graph_expand(
         except nx.NetworkXError:
             continue
 
+    import time
+    t0_graph = time.perf_counter()
     expanded_chunks = _fetch_chunks_by_graph_ids(neighbor_node_ids, repo_id, existing_ids)
+    t_graph_ms = (time.perf_counter() - t0_graph) * 1000
 
     log.info(
-        f"Graph expansion: {len(chunk_to_graph)} seed nodes → "
-        f"{len(expanded_chunks)} neighbor chunks added"
+        f"[TIMING] Graph expansion ({len(chunk_to_graph)} seed nodes -> "
+        f"{len(expanded_chunks)} added) in {t_graph_ms:.1f}ms"
     )
 
     for c in expanded_chunks:

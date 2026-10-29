@@ -24,11 +24,18 @@ class Settings(BaseSettings):
     )
     groq_api_key: str = ""
     llm_model: str = "gemini-1.5-flash"
+    llm_connect_timeout: float = 15.0
+    llm_read_timeout: float = 60.0
+    llm_max_retries: int = 3
+    llm_retry_delay: float = 1.0
+    llm_retry_jitter: float = 0.5
 
     # Embedding & Reranking
     embedding_model: str = "BAAI/bge-base-en-v1.5"
     reranker_model: str = "BAAI/bge-reranker-base"
     embedding_device: str = "cpu"  # "cuda" if GPU available
+    enable_reranker: bool = True
+    rerank_max_candidates: int = 10
 
     # Storage paths
     chroma_persist_dir: str = "./data/chroma"

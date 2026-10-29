@@ -34,6 +34,18 @@ app.include_router(query_router)
 app.include_router(repo_router)
 
 
+@app.on_event("startup")
+async def startup_warmup():
+    """Preload embedding model at server startup to eliminate first-query cold start delay."""
+    try:
+        from app.ingestion.embedder import get_embedding_model
+        log.info("Preloading embedding model on startup...")
+        get_embedding_model()
+        log.info("Embedding model preloaded successfully.")
+    except Exception as e:
+        log.warning(f"Model startup preload deferred: {e}")
+
+
 @app.get("/")
 async def root():
     return {
@@ -56,4 +68,5 @@ if __name__ == "__main__":
         port=settings.port,
         reload=True,
         reload_dirs=["app"],
+        reload_excludes=["data/*", "*/data/*"],
     )

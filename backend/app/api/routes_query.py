@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.models.schemas import QueryRequest, QueryResponse, RetrievalInfo, RetrievedChunk
 from app.retrieval.query_analyzer import classify_intent, rewrite_query, get_intent_config
@@ -11,7 +11,7 @@ from app.retrieval.hybrid_retriever import hybrid_retrieve
 from app.retrieval.reranker import rerank
 from app.retrieval.graph_retriever import graph_expand
 from app.retrieval.context_builder import build_context
-from app.generation.llm_client import generate_response, generate_response_stream
+from app.generation.llm_client import generate_response, generate_response_stream, LLMError
 from app.generation.memory import get_or_create_conversation
 from app.generation.guard import verify_response
 from app.utils.logger import get_logger
@@ -23,12 +23,31 @@ router = APIRouter(prefix="/api/query", tags=["query"])
 @router.post("/", response_model=QueryResponse)
 async def query(request: QueryRequest):
     """Full RAG query pipeline — non-streaming."""
-    result = await _execute_pipeline(
-        repo_id=request.repo_id,
-        question=request.question,
-        conversation_id=request.conversation_id,
-    )
-    return result
+    try:
+        result = await _execute_pipeline(
+            repo_id=request.repo_id,
+            question=request.question,
+            conversation_id=request.conversation_id,
+        )
+        return result
+    except LLMError as e:
+        status_code = e.status_code or 500
+        if e.error_code == "auth_error":
+            status_code = 401
+        elif e.error_code in ("quota_exhausted", "rate_limit"):
+            status_code = 429
+        elif e.error_code == "service_unavailable":
+            status_code = 503
+        elif e.error_code == "timeout":
+            status_code = 504
+        headers = {}
+        if e.retry_after:
+            headers["Retry-After"] = str(int(e.retry_after))
+        raise HTTPException(
+            status_code=status_code,
+            detail={"error_code": e.error_code, "message": e.message},
+            headers=headers if headers else None,
+        )
 
 
 @router.websocket("/stream")
@@ -104,20 +123,39 @@ async def query_stream(websocket: WebSocket):
             conversation.add_turn("user", question)
             conversation.add_turn("assistant", full_response[:500], referenced_files)
 
+            total_response_ms = (time.time() - start) * 1000
+            log.info(f"[TIMING] Total response time for query: {total_response_ms:.1f}ms ({total_response_ms/1000:.2f}s)")
             await websocket.send_json({
                 "type": "done",
                 "data": {
                     "conversation_id": conversation.conversation_id,
                     "verification": verification,
+                    "total_ms": total_response_ms,
                 },
             })
 
     except WebSocketDisconnect:
         log.info("WebSocket client disconnected")
+    except LLMError as e:
+        log.error(f"LLM streaming error [{e.error_code}] (status={e.status_code}): {e.message}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "error_code": e.error_code,
+                "status_code": e.status_code,
+                "retry_after": e.retry_after,
+                "data": e.message,
+            })
+        except Exception:
+            pass
     except Exception as e:
         log.error(f"WebSocket error: {e}")
         try:
-            await websocket.send_json({"type": "error", "data": str(e)})
+            await websocket.send_json({
+                "type": "error",
+                "error_code": "internal_error",
+                "data": str(e),
+            })
         except Exception:
             pass
 
