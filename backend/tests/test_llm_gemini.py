@@ -61,13 +61,13 @@ def test_huggingface_env_override():
 
 
 def test_gemini_model_fallback():
-    """Verify _get_gemini_model falls back to gemini-1.5-flash if an invalid non-gemini model is set."""
+    """Verify _get_gemini_model falls back to default gemini model if an invalid non-gemini model is set."""
     with patch("app.generation.llm_client.settings") as mock_settings:
         mock_settings.llm_model = "llama-3.3-70b-versatile"
-        assert _get_gemini_model() == "gemini-1.5-flash"
+        assert _get_gemini_model() == "gemini-3.5-flash-lite"
 
         mock_settings.llm_model = ""
-        assert _get_gemini_model() == "gemini-1.5-flash"
+        assert _get_gemini_model() == "gemini-3.5-flash-lite"
 
         mock_settings.llm_model = "gemini-2.0-flash"
         assert _get_gemini_model() == "gemini-2.0-flash"

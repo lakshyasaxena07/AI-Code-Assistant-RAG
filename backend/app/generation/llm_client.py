@@ -433,7 +433,7 @@ def _get_gemini_model() -> str:
     """Ensure a valid Gemini model is used even if an old llama model was passed in env."""
     model = settings.llm_model
     if not model or "gemini" not in model.lower():
-        return "gemini-1.5-flash"
+        return "gemini-3.5-flash-lite"
     return model
 
 
